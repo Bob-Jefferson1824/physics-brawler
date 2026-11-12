@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Physics Brawler - Stage 1</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+
+  <!-- HUD -->
+  <header id="hud-title">
+    <h1>Physics Brawler</h1>
+    <span class="badge">Stage 1</span>
+    <span id="fps">-- FPS</span>
+  </header>
+
+  <aside id="debug-panel">
+    <h2>Test tools</h2>
+    <button data-debug="shove">Shove player</button>
+    <button data-debug="respawn">Respawn player</button>
+    <button data-debug="drop">Drop crate</button>
+    <button data-debug="reset">Reset crates</button>
+    <button id="pause-btn">Pause (Esc)</button>
+  </aside>
+
+  <section id="input-monitor" aria-label="Key detection">
+    <h2>Key detection</h2>
+    <div class="keys">
+      <span class="key" data-action="moveForward">W</span>
+      <span class="key" data-action="moveLeft">A</span>
+      <span class="key" data-action="moveBack">S</span>
+      <span class="key" data-action="moveRight">D</span>
+      <span class="key wide" data-action="jump">Space</span>
+      <span class="key" data-action="leftHand">Q</span>
+      <span class="key" data-action="rightHand">E</span>
+      <span class="key" data-action="pause">Esc</span>
+    </div>
+    <p>Keys light up when detected. They do not move the character yet.</p>
+  </section>
+
+  <p id="hint">Drag to orbit the camera &middot; Scroll to zoom</p>
+  <div id="toast" role="status"></div>
+
+  <!-- Overlays -->
+  <div id="pause-overlay" class="overlay hidden">
+    <div class="card">
+      <h2>Paused</h2>
+      <table>
+        <tr><td>W A S D</td><td>Move (Stage 2)</td></tr>
+        <tr><td>Space</td><td>Jump (Stage 2)</td></tr>
+        <tr><td>Q</td><td>Left hand punch / grab (Stage 4)</td></tr>
+        <tr><td>E</td><td>Right hand punch / grab (Stage 4)</td></tr>
+        <tr><td>Esc</td><td>Pause / resume</td></tr>
+      </table>
+      <button id="resume-btn" class="primary">Resume</button>
+    </div>
+  </div>
+
+  <div id="loading" class="overlay">
+    <div class="card">
+      <div class="spinner"></div>
+      <h2>Loading</h2>
+      <p id="loading-status">Starting...</p>
+    </div>
+  </div>
+
+  <div id="fatal" class="overlay hidden">
+    <div class="card error">
+      <h2>The game could not start</h2>
+      <p id="fatal-message"></p>
+      <p>Check your internet connection (the game loads Three.js and Rapier from a CDN), make sure you are using a recent desktop browser with WebGL enabled, then reload the page.</p>
+      <details><summary>Technical details</summary><pre id="fatal-details"></pre></details>
+    </div>
+  </div>
+
+  <noscript><div class="overlay"><div class="card error"><h2>JavaScript is required</h2></div></div></noscript>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
