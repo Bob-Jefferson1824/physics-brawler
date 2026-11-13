@@ -3,7 +3,7 @@
 An original, browser-based 3D physics brawler inspired by the chaos of party fighting games.
 Built with Three.js (graphics), Rapier (physics) and plain JavaScript. No build step, no installs.
 
-**Status: Stage 1 (foundation).** See "Features" below.
+**Status: Stage 2 (movement, jumping and a physical cartoon body).**
 
 ## Run it
 The game uses ES modules, so it must be served over http(s). Opening `index.html` by
@@ -29,7 +29,8 @@ Easiest: deploy to GitHub Pages (steps below) and open the URL.
 - `src/deps.js`, `src/config.js` - CDN loading (with fallback) and tunable settings
 - `src/physics.js` - Rapier wrapper: fixed timestep, interpolation, respawn
 - `src/world.js` - arena, lighting, crates
-- `src/player.js` - placeholder player
+- `src/player.js` - player character (meshes, physics body, animation wiring)
+- `src/character.js` - movement, jumping, stumble and animation logic
 - `src/camera.js` - third-person camera
 - `src/input.js` - remappable action-based keyboard input
 - `src/ui.js` - HUD and overlay access

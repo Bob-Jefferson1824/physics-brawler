@@ -29,15 +29,18 @@ export class ThirdPersonCamera {
 
   /** Jump straight to the target with no smoothing (used at start-up). */
   snapTo(target) {
-    this.focus.set(target.x, target.y, target.z);
+    this.focus.set(target.x, Math.max(target.y, this.config.minFocusY), target.z);
     this._apply();
   }
 
   update(dt, target) {
-    const k = 1 - Math.exp(-this.config.followSharpness * dt);
-    this.focus.x += (target.x - this.focus.x) * k;
-    this.focus.y += (target.y - this.focus.y) * k;
-    this.focus.z += (target.z - this.focus.z) * k;
+    const kh = 1 - Math.exp(-this.config.followSharpness * dt);
+    const kv = 1 - Math.exp(-this.config.followSharpnessY * dt);
+    // Do not follow the player down into the void; the camera just watches them fall.
+    const targetY = Math.max(target.y, this.config.minFocusY);
+    this.focus.x += (target.x - this.focus.x) * kh;
+    this.focus.y += (targetY - this.focus.y) * kv;
+    this.focus.z += (target.z - this.focus.z) * kh;
     this._apply();
   }
 

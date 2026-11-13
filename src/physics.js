@@ -11,6 +11,7 @@ export class PhysicsWorld {
     this.entities = new Set();
     this.accumulator = 0;
     this.onRespawn = null; // optional callback(entity)
+    this.preStep = [];     // callbacks(dt) run before every fixed physics step
   }
 
   // ---- Body creation ----
@@ -47,8 +48,11 @@ export class PhysicsWorld {
     return body;
   }
 
-  /** Upright capsule. With lockTilt the body cannot fall over, it can only spin around Y. */
-  createDynamicCapsule({ position, halfHeight, radius, density = 1, friction = 0.5, restitution = 0.1, lockTilt = true }) {
+  /**
+   * Capsule body. With lockTilt it cannot fall over; with lockYaw as well it cannot spin at all
+   * (the character's facing is handled by the visual body, not by physics).
+   */
+  createDynamicCapsule({ position, halfHeight, radius, density = 1, friction = 0.3, restitution = 0.0, lockTilt = true, lockYaw = true }) {
     const R = this.RAPIER;
     const desc = R.RigidBodyDesc.dynamic()
       .setTranslation(position.x, position.y, position.z)
@@ -56,18 +60,34 @@ export class PhysicsWorld {
       .setAngularDamping(1.0)
       .setCcdEnabled(true);
     if (lockTilt) {
-      if (typeof desc.enabledRotations === 'function') desc.enabledRotations(false, true, false);
-      else desc.lockRotations();
+      if (lockYaw || typeof desc.enabledRotations !== 'function') desc.lockRotations();
+      else desc.enabledRotations(false, true, false);
     }
     const body = this.world.createRigidBody(desc);
-    this.world.createCollider(
-      R.ColliderDesc.capsule(halfHeight, radius)
-        .setDensity(density)
-        .setFriction(friction)
-        .setRestitution(restitution),
-      body
-    );
+    const collider = R.ColliderDesc.capsule(halfHeight, radius)
+      .setDensity(density)
+      .setFriction(friction)
+      .setRestitution(restitution);
+    // Use the lower of the two friction values so the character glides along walls and crates
+    // instead of sticking to them.
+    if (R.CoefficientCombineRule && typeof collider.setFrictionCombineRule === 'function') {
+      collider.setFrictionCombineRule(R.CoefficientCombineRule.Min);
+    }
+    this.world.createCollider(collider, body);
     return body;
+  }
+
+  /** Casts a ray and returns the hit distance, or -1 if nothing was hit within maxDist. */
+  raycast(ox, oy, oz, dx, dy, dz, maxDist) {
+    const ray = new this.RAPIER.Ray({ x: ox, y: oy, z: oz }, { x: dx, y: dy, z: dz });
+    const hit = this.world.castRay(ray, maxDist, true);
+    if (!hit) return -1;
+    const d = hit.timeOfImpact !== undefined ? hit.timeOfImpact : hit.toi;
+    return d === undefined ? 0 : d;
+  }
+
+  addPreStep(callback) {
+    this.preStep.push(callback);
   }
 
   // ---- Syncing physics bodies to Three.js meshes ----
@@ -107,6 +127,7 @@ export class PhysicsWorld {
     const { fixedStep, maxFrameTime } = this.config;
     this.accumulator += Math.min(dt, maxFrameTime);
     while (this.accumulator >= fixedStep) {
+      for (const cb of this.preStep) cb(fixedStep);
       for (const e of this.entities) {
         e.prevP.copy(e.currP);
         e.prevQ.copy(e.currQ);

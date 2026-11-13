@@ -44,7 +44,10 @@ export class Game {
     this.input = new InputManager();
 
     this.physics.onRespawn = (entity) => {
-      if (entity.kind === 'player') this.ui.toast('Player respawned');
+      if (entity.kind !== 'player') return;
+      this.player.onRespawned();
+      this.cameraRig.snapTo(this.player.position); // no long camera swoop back from the void
+      this.ui.toast('Player respawned');
     };
 
     // UI wiring
@@ -100,6 +103,7 @@ export class Game {
       if (this.input.wasPressed(ACTION.PAUSE)) this.setPaused(!this.paused);
 
       if (!this.paused) {
+        this.player.update(dt, this.input, this.cameraRig.yaw);
         this.physics.step(dt);
         this.world.update(dt);
       }

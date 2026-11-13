@@ -33,7 +33,9 @@ export const CAMERA = {
   pitch: 0.55,           // radians above horizontal
   minPitch: 0.12,
   maxPitch: 1.3,
-  followSharpness: 6,    // higher = camera catches up faster
+  followSharpness: 7,    // horizontal catch-up speed (higher = tighter)
+  followSharpnessY: 3,   // vertical catch-up is slower so jumps do not jerk the camera
+  minFocusY: -1.5,       // camera stops following downward below this, so it does not dive into the void
   lookHeight: 1.0,
   orbitSensitivity: 0.005,
 };
@@ -48,3 +50,22 @@ export const PLAYER = {
 export const PALETTE = [0xff6b6b, 0xffd93d, 0x6bcb77, 0x4d96ff, 0x9d4edd, 0xff9f45];
 
 export const MAX_EXTRA_CRATES = 25;
+
+// Movement and animation tuning for the player character (see character.js).
+export const CHARACTER = {
+  maxSpeed: 7,            // top walking speed (units per second)
+  accel: 48,              // how fast velocity changes while a key is held
+  decel: 42,              // how fast the character slows when no key is held
+  airControl: 0.4,        // fraction of acceleration available in the air
+  jumpSpeed: 9.5,         // launch speed; with gravity -22 this is about 2 units of height
+  coyoteTime: 0.1,        // grace period to still jump just after walking off an edge
+  jumpBuffer: 0.12,       // a jump pressed this long before landing still counts
+  jumpCooldown: 0.2,      // minimum time between jumps
+  maxFallSpeed: 40,
+  turnSharpness: 14,      // how quickly the body turns toward the movement direction
+  stumbleThreshold: 8.5,  // sudden outside speed change (shove, big hit) needed to cause a stumble
+  stumbleTime: 0.7,
+  recoverTime: 0.5,
+  stumbleCooldown: 0.5,
+  groundProbeLength: 0.28,
+};
