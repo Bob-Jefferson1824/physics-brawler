@@ -1,40 +1,51 @@
-# Physics Brawler (working title)
+# Physics Brawler
 
-An original, browser-based 3D physics brawler inspired by the chaos of party fighting games.
-Built with Three.js (graphics), Rapier (physics) and plain JavaScript. No build step, no installs.
+An original browser-based 3D physics brawler (Three.js + Rapier). Play solo against bots, or online with friends.
 
-**Status: Stage 2 (movement, jumping and a physical cartoon body).**
+## Controls
+W A S D move (relative to the camera) · Space jump · **Q** left hand · **E** right hand · Esc pause
+Tap Q/E to punch. Hold to reach and grab crates or other fighters. Release to let go (moving while you release throws).
+Hold Q and E together for a two-handed grab (needed for heavy crates). If someone grabs you, struggle by moving or jumping.
+Drag to orbit the camera, scroll to zoom.
 
-## Run it
-The game uses ES modules, so it must be served over http(s). Opening `index.html` by
-double-clicking (a `file://` address) will NOT work in most browsers.
+## What is in the game
+* **Maps:** Classic Arena and Crossroads (a cross-shaped platform with deadly gaps and four jumpable islands).
+* **Bots:** 0 to 5, Easy / Normal / Hard, Reset Bots, on/off.
+* **Online:** up to 6 players (host + 5 friends) plus bots. The HOST's browser runs the game; friends send their keys and see the host's world.
 
-Easiest: deploy to GitHub Pages (steps below) and open the URL.
+## Playing online
+1. One player opens the game, types a name and the server address, and clicks **Host**. A 4-letter room code appears.
+2. Friends open the same game, type their name, the same server address and the room code, and click **Join**.
+3. The host chooses the map, bots and difficulty. If the host leaves, the game ends for everyone.
 
-## Deploy to GitHub Pages
-1. Create a new public repository on github.com (for example `physics-brawler`).
-2. Unzip the download on your computer. GitHub does not unzip files for you.
-3. In the repository click **Add file > Upload files**, then drag in the CONTENTS of the
-   `physics-brawler` folder (`index.html`, `style.css`, `src`, `.nojekyll`, `README.md`),
-   not the folder itself. `index.html` must be at the top level of the repository.
-4. Click **Commit changes**.
-5. Go to **Settings > Pages**. Under "Build and deployment" choose **Deploy from a branch**,
-   branch **main**, folder **/ (root)**, then **Save**.
-6. After a minute or two the site is live at `https://YOUR-USERNAME.github.io/physics-brawler/`.
+## Deploying (GitHub + Render)
+
+### Option A (simplest): everything on Render
+1. Put all the files in a GitHub repository (see "Files" below; upload the whole folder contents).
+2. On render.com: **New > Web Service**, connect the repository.
+3. Settings: Runtime **Node**, Build Command `npm install`, Start Command `npm start`. (Or choose **New > Blueprint**: `render.yaml` sets this up.)
+4. When it is live, open `https://YOUR-NAME.onrender.com`. Everyone opens that same address. The server box fills itself in, so just click Host / Join.
+
+### Option B: game on GitHub Pages, online server on Render
+1. Do Option A for the server (it also serves the game, which is fine).
+2. Turn on GitHub Pages for the repository (Settings > Pages > main branch, root).
+3. On the GitHub Pages site, type your Render address (for example `your-name.onrender.com`) into the **Server** box, then Host / Join. The address is remembered.
+
+### Notes
+* Render's free plan sleeps after about 15 minutes of no visitors. The first connection afterwards can take up to a minute; just try again.
+* Optional: set an `ALLOWED_ORIGINS` environment variable on Render (comma separated, for example `https://you.github.io`) to refuse connections from other websites.
+* The server only creates rooms and forwards messages. All physics runs in the host's browser.
 
 ## Files
-- `index.html`, `style.css` - page, HUD and overlays
-- `src/main.js` - entry point and error handling
-- `src/game.js` - main loop and wiring
-- `src/deps.js`, `src/config.js` - CDN loading (with fallback) and tunable settings
-- `src/physics.js` - Rapier wrapper: fixed timestep, interpolation, respawn
-- `src/world.js` - arena, lighting, crates
-- `src/player.js` - player character (meshes, physics body, animation wiring)
-- `src/character.js` - movement, jumping, stumble and animation logic
-- `src/camera.js` - third-person camera
-- `src/input.js` - remappable action-based keyboard input
-- `src/ui.js` - HUD and overlay access
+* `index.html`, `style.css` - page and HUD
+* `src/` - game code: `game.js` (loop and modes), `sim.js` (the running world), `maps.js` (map data), `world.js` (builds a map),
+  `fighter.js` / `avatar.js` (characters), `player.js`, `remote.js`, `bot.js`, `combat.js`, `hands.js`, `character.js`,
+  `physics.js`, `camera.js`, `input.js`, `net.js`, `multiplayer.js`, `ui.js`, `config.js`, `deps.js`, `main.js`
+* `server/server.js`, `package.json`, `render.yaml` - the online server (Node; only needed for online play)
 
-## Libraries (pinned, loaded from jsDelivr with an unpkg fallback)
-- three 0.170.0
-- @dimforge/rapier3d-compat 0.14.0
+## Updating
+Every file reference carries a version tag (currently `v=s4r1`). When you upload a new version, upload ALL files, then hard-refresh
+(Cmd+Shift+R). The game checks at startup that its files match and names any that do not. To change the tag yourself, find-and-replace
+`v=s4r1` across `index.html` and `src/`.
+
+Libraries (loaded from jsDelivr, with an unpkg fallback): three 0.170.0, @dimforge/rapier3d-compat 0.14.0.

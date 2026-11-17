@@ -30,7 +30,7 @@ export class PhysicsWorld {
     return body;
   }
 
-  createDynamicBox({ position, halfExtents, density = 0.8, friction = 0.7, restitution = 0.25, linearDamping = 0.05, angularDamping = 0.15 }) {
+  createDynamicBox({ position, halfExtents, density = 0.8, friction = 0.7, restitution = 0.25, linearDamping = 0.05, angularDamping = 0.15, groups = null }) {
     const R = this.RAPIER;
     const desc = R.RigidBodyDesc.dynamic()
       .setTranslation(position.x, position.y, position.z)
@@ -38,13 +38,12 @@ export class PhysicsWorld {
       .setAngularDamping(angularDamping)
       .setCcdEnabled(true);
     const body = this.world.createRigidBody(desc);
-    this.world.createCollider(
-      R.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z)
-        .setDensity(density)
-        .setFriction(friction)
-        .setRestitution(restitution),
-      body
-    );
+    const collider = R.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z)
+      .setDensity(density)
+      .setFriction(friction)
+      .setRestitution(restitution);
+    if (groups !== null && typeof collider.setCollisionGroups === 'function') collider.setCollisionGroups(groups);
+    body.__collider = this.world.createCollider(collider, body);
     return body;
   }
 
@@ -52,7 +51,7 @@ export class PhysicsWorld {
    * Capsule body. With lockTilt it cannot fall over; with lockYaw as well it cannot spin at all
    * (the character's facing is handled by the visual body, not by physics).
    */
-  createDynamicCapsule({ position, halfHeight, radius, density = 1, friction = 0.3, restitution = 0.0, lockTilt = true, lockYaw = true }) {
+  createDynamicCapsule({ position, halfHeight, radius, density = 1, friction = 0.3, restitution = 0.0, lockTilt = true, lockYaw = true, groups = null }) {
     const R = this.RAPIER;
     const desc = R.RigidBodyDesc.dynamic()
       .setTranslation(position.x, position.y, position.z)
@@ -73,8 +72,38 @@ export class PhysicsWorld {
     if (R.CoefficientCombineRule && typeof collider.setFrictionCombineRule === 'function') {
       collider.setFrictionCombineRule(R.CoefficientCombineRule.Min);
     }
-    this.world.createCollider(collider, body);
+    if (groups !== null && typeof collider.setCollisionGroups === 'function') collider.setCollisionGroups(groups);
+    body.__collider = this.world.createCollider(collider, body);
     return body;
+  }
+
+  /**
+   * A hand: a small ball with no gravity that is steered by velocity. It is a real body, so it
+   * pushes crates and other characters, but it cannot collide with its own owner or other hands.
+   */
+  createHandBall({ position, radius, mass, groups = null }) {
+    const R = this.RAPIER;
+    const desc = R.RigidBodyDesc.dynamic()
+      .setTranslation(position.x, position.y, position.z)
+      .setLinearDamping(0)
+      .setAngularDamping(2)
+      .setCcdEnabled(true);
+    if (typeof desc.setGravityScale === 'function') desc.setGravityScale(0);
+    desc.lockRotations();
+    const body = this.world.createRigidBody(desc);
+    const collider = R.ColliderDesc.ball(radius).setFriction(0.3).setRestitution(0.1);
+    if (typeof collider.setMass === 'function') collider.setMass(mass);
+    else collider.setDensity(mass / ((4 / 3) * Math.PI * radius ** 3));
+    if (groups !== null && typeof collider.setCollisionGroups === 'function') collider.setCollisionGroups(groups);
+    body.__collider = this.world.createCollider(collider, body);
+    return body;
+  }
+
+  /** Changes which groups a body's collider interacts with (used while a hand holds something). */
+  setColliderGroups(body, groups) {
+    if (body.__collider && typeof body.__collider.setCollisionGroups === 'function') {
+      body.__collider.setCollisionGroups(groups);
+    }
   }
 
   /** Casts a ray and returns the hit distance, or -1 if nothing was hit within maxDist. */
@@ -90,10 +119,15 @@ export class PhysicsWorld {
     this.preStep.push(callback);
   }
 
+  removePreStep(callback) {
+    const i = this.preStep.indexOf(callback);
+    if (i >= 0) this.preStep.splice(i, 1);
+  }
+
   // ---- Syncing physics bodies to Three.js meshes ----
 
   /** Links a dynamic body to a mesh. The mesh is moved automatically each frame. */
-  register(body, mesh, { kind = 'object', respawn = true } = {}) {
+  register(body, mesh, { kind = 'object', respawn = true, ...extra } = {}) {
     const THREE = this.THREE;
     const t = body.translation();
     const r = body.rotation();
@@ -109,10 +143,16 @@ export class PhysicsWorld {
       prevQ: new THREE.Quaternion(r.x, r.y, r.z, r.w),
       currQ: new THREE.Quaternion(r.x, r.y, r.z, r.w),
     };
+    Object.assign(entity, extra); // e.g. owner, half
     mesh.position.copy(entity.currP);
     mesh.quaternion.copy(entity.currQ);
     this.entities.add(entity);
     return entity;
+  }
+
+  /** Removes a static body (used when a map is replaced). */
+  removeStatic(body) {
+    this.world.removeRigidBody(body);
   }
 
   remove(entity) {

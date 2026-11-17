@@ -1,6 +1,6 @@
 // Loads Three.js and Rapier from a CDN, trying a fallback CDN if the first fails.
 // Only game.js imports this file; every other module receives THREE and RAPIER as arguments.
-import { DEPENDENCIES } from './config.js';
+import { DEPENDENCIES } from './config.js?v=s4r1';
 
 async function importFirst(urls, label) {
   const errors = [];

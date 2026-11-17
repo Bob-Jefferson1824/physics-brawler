@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Physics Brawler - Stage 2</title>
-  <link rel="stylesheet" href="style.css">
+  <title>Physics Brawler - Stage 4</title>
+  <link rel="stylesheet" href="style.css?v=s4r1">
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -12,7 +12,7 @@
   <!-- HUD -->
   <header id="hud-title">
     <h1>Physics Brawler</h1>
-    <span class="badge">Stage 2</span>
+    <span class="badge">Stage 4</span>
     <span id="fps">-- FPS</span>
   </header>
 
@@ -24,6 +24,52 @@
     <button data-debug="reset">Reset crates</button>
     <button id="pause-btn">Pause (Esc)</button>
   </aside>
+
+  <aside id="online-panel" aria-label="Online play">
+    <h2>Online</h2>
+    <div id="online-fields">
+      <input id="online-name" maxlength="14" placeholder="Your name" autocomplete="off">
+      <input id="online-server" placeholder="Server (my-game.onrender.com)" autocomplete="off" spellcheck="false">
+      <div class="row">
+        <button id="online-host">Host</button>
+        <input id="online-code" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false">
+        <button id="online-join">Join</button>
+      </div>
+    </div>
+    <button id="online-leave" class="hidden">Leave online game</button>
+    <div id="online-status" data-kind="info">Offline: playing solo.</div>
+    <ul id="online-players"></ul>
+  </aside>
+
+  <aside id="bot-panel" aria-label="Bots">
+    <h2>Bots</h2>
+    <div id="bot-count-label">Active bots: 3 / 5</div>
+    <div class="row">
+      <button id="bot-minus" aria-label="Fewer bots">&minus;</button>
+      <button id="bot-plus" aria-label="More bots">+</button>
+      <label class="check"><input type="checkbox" id="bot-enabled" checked> Bots on</label>
+    </div>
+    <div class="seg" id="bot-difficulty" role="group" aria-label="Bot difficulty">
+      <button data-diff="easy">Easy</button>
+      <button data-diff="normal" class="active">Normal</button>
+      <button data-diff="hard">Hard</button>
+    </div>
+    <button id="bot-reset">Reset Bots</button>
+  </aside>
+
+  <aside id="map-panel" aria-label="Map">
+    <h2>Map</h2>
+    <div class="seg" id="map-select" role="group" aria-label="Choose a map">
+      <button data-map="classic" class="active">Classic</button>
+      <button data-map="crossroads">Crossroads</button>
+    </div>
+  </aside>
+
+  <div id="hand-status" aria-label="Hand status">
+    <div class="hand" id="hand-left" data-mode="ready"><span class="k">Q</span><span class="t">Left: ready</span></div>
+    <div class="hand" id="hand-right" data-mode="ready"><span class="k">E</span><span class="t">Right: ready</span></div>
+  </div>
+  <div id="banner" role="status"></div>
 
   <section id="input-monitor" aria-label="Key detection">
     <h2>Key detection</h2>
@@ -37,10 +83,10 @@
       <span class="key" data-action="rightHand">E</span>
       <span class="key" data-action="pause">Esc</span>
     </div>
-    <p>W A S D move, Space jumps. Q and E are detected but hands arrive in a later stage.</p>
+    <p>W A S D move, Space jumps. Tap Q / E to punch, hold to grab, release to throw.</p>
   </section>
 
-  <p id="hint">W A S D move &middot; Space jump &middot; Drag to orbit &middot; Scroll to zoom</p>
+  <p id="hint">Move W A S D &middot; Jump Space &middot; Punch / grab Q E &middot; Drag to orbit &middot; Scroll to zoom</p>
   <div id="toast" role="status"></div>
 
   <!-- Overlays -->
@@ -50,11 +96,13 @@
       <table>
         <tr><td>W A S D</td><td>Move (relative to the camera)</td></tr>
         <tr><td>Space</td><td>Jump</td></tr>
-        <tr><td>Q</td><td>Left hand (not implemented yet)</td></tr>
-        <tr><td>E</td><td>Right hand (not implemented yet)</td></tr>
+        <tr><td>Q</td><td>Left hand: tap to punch, hold to grab, release to throw</td></tr>
+        <tr><td>E</td><td>Right hand: tap to punch, hold to grab, release to throw</td></tr>
         <tr><td>Esc</td><td>Pause / resume</td></tr>
       </table>
+      <p id="pause-note" class="hidden"></p>
       <button id="resume-btn" class="primary">Resume</button>
+      <button id="leave-btn" class="hidden">Leave online game</button>
     </div>
   </div>
 
@@ -70,6 +118,7 @@
     <div class="card error">
       <h2>The game could not start</h2>
       <p id="fatal-message"></p>
+      <p id="fatal-hint" class="hidden"><strong>This looks like a version mismatch.</strong> Some files on the site are from an older version than others. Upload <em>every</em> file from the latest ZIP (including everything inside <code>src</code>), wait for GitHub Pages to finish deploying, then hard-refresh with Cmd+Shift+R.</p>
       <p>Check your internet connection (the game loads Three.js and Rapier from a CDN), make sure you are using a recent desktop browser with WebGL enabled, then reload the page.</p>
       <details><summary>Technical details</summary><pre id="fatal-details"></pre></details>
     </div>
@@ -77,6 +126,6 @@
 
   <noscript><div class="overlay"><div class="card error"><h2>JavaScript is required</h2></div></div></noscript>
 
-  <script type="module" src="src/main.js"></script>
+  <script type="module" src="src/main.js?v=s4r1"></script>
 </body>
 </html>

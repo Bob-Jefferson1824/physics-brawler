@@ -1,4 +1,6 @@
-// Builds the arena: sky, lights, floor, rails, ramp, block, crates and decorations.
+// Builds a map: sky, lights, floors, props, crates and decorations. Works for any map in maps.js.
+// With physics = null it builds only the visuals (used by guests in an online game).
+import { makeArena } from './maps.js?v=s4r1';
 
 function makeCanvasTexture(THREE, size, draw) {
   const canvas = document.createElement('canvas');
@@ -12,8 +14,12 @@ function makeCanvasTexture(THREE, size, draw) {
 
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
-export function createWorld({ THREE, scene, physics, arena, palette, maxExtraCrates }) {
-  const half = arena.halfSize;
+export function createWorld({ THREE, scene, physics, map, palette, maxExtraCrates, crateGroups = null }) {
+  const theme = map.theme;
+  const arena = makeArena(map);
+  const group = new THREE.Group();      // everything the map adds lives under this, so it can be removed in one go
+  scene.add(group);
+  const staticBodies = [];
 
   // ---- Sky and lights ----
   const sky = document.createElement('canvas');
@@ -21,70 +27,73 @@ export function createWorld({ THREE, scene, physics, arena, palette, maxExtraCra
   sky.height = 256;
   const sctx = sky.getContext('2d');
   const grad = sctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0, '#5db7ff');
-  grad.addColorStop(1, '#fff1d6');
+  grad.addColorStop(0, theme.skyTop);
+  grad.addColorStop(1, theme.skyBottom);
   sctx.fillStyle = grad;
   sctx.fillRect(0, 0, 2, 256);
   const skyTex = new THREE.CanvasTexture(sky);
   skyTex.colorSpace = THREE.SRGBColorSpace;
   scene.background = skyTex;
-  scene.fog = new THREE.Fog(0xd9ecff, 70, 150);
+  scene.fog = new THREE.Fog(theme.fog, 70, 150);
 
-  scene.add(new THREE.HemisphereLight(0xdff0ff, 0xffe2b8, 1.1));
-  const sun = new THREE.DirectionalLight(0xffffff, 1.8);
-  sun.position.set(18, 28, 12);
+  group.add(new THREE.HemisphereLight(theme.hemiSky, theme.hemiGround, 1.1));
+  const sun = new THREE.DirectionalLight(theme.sun, 1.8);
+  sun.position.set(theme.sunPos[0], theme.sunPos[1], theme.sunPos[2]);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   const sc = sun.shadow.camera;
   sc.left = -32; sc.right = 32; sc.top = 32; sc.bottom = -32; sc.near = 1; sc.far = 90;
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.03;
-  scene.add(sun);
+  group.add(sun);
 
-  // ---- Floor (top surface at y = 0) ----
+  // ---- Floors (top surface at y = 0) ----
   const checker = makeCanvasTexture(THREE, 64, (ctx, s) => {
-    ctx.fillStyle = '#9ee6c4'; ctx.fillRect(0, 0, s, s);
-    ctx.fillStyle = '#7fd6b0'; ctx.fillRect(0, 0, s / 2, s / 2); ctx.fillRect(s / 2, s / 2, s / 2, s / 2);
+    ctx.fillStyle = theme.checkerA; ctx.fillRect(0, 0, s, s);
+    ctx.fillStyle = theme.checkerB; ctx.fillRect(0, 0, s / 2, s / 2); ctx.fillRect(s / 2, s / 2, s / 2, s / 2);
   });
   checker.wrapS = checker.wrapT = THREE.RepeatWrapping;
-  checker.repeat.set(half / 2, half / 2);
-  const sideMat = new THREE.MeshStandardMaterial({ color: 0xffb86b, roughness: 0.7 });
-  const topMat = new THREE.MeshStandardMaterial({ map: checker, roughness: 0.8 });
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(half * 2, 1, half * 2),
-    [sideMat, sideMat, topMat, sideMat, sideMat, sideMat]); // +x -x +y -y +z -z
-  floor.position.set(0, -0.5, 0);
-  floor.receiveShadow = true;
-  scene.add(floor);
-  physics.createStaticBox({ position: { x: 0, y: -0.5, z: 0 }, halfExtents: { x: half, y: 0.5, z: half }, friction: 0.9 });
-
-  // Visual-only underside so the arena looks like a floating island
-  const under = new THREE.Mesh(new THREE.BoxGeometry(half * 1.8, 5, half * 1.8),
-    new THREE.MeshStandardMaterial({ color: 0x8e6bbf, roughness: 0.9 }));
-  under.position.set(0, -3.5, 0);
-  scene.add(under);
-
-  // ---- Static props ----
-  const railMat = new THREE.MeshStandardMaterial({ color: 0xff6b9d, roughness: 0.5 });
-  const blockMat = new THREE.MeshStandardMaterial({ color: 0x4d96ff, roughness: 0.5 });
-
-  function addStatic(name, position, halfExtents, material, rotation = null) {
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(halfExtents.x * 2, halfExtents.y * 2, halfExtents.z * 2), material);
-    mesh.name = name;
-    mesh.position.set(position.x, position.y, position.z);
-    if (rotation) mesh.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    scene.add(mesh);
-    physics.createStaticBox({ position, halfExtents, rotation });
-    return mesh;
+  const sideMat = new THREE.MeshStandardMaterial({ color: theme.side, roughness: 0.7 });
+  const underMat = new THREE.MeshStandardMaterial({ color: theme.under, roughness: 0.9 });
+  for (const f of map.floors) {
+    const tex = checker.clone();
+    tex.needsUpdate = true;
+    tex.repeat.set(f.w / 4, f.d / 4);   // each checker square is 2 units across
+    const topMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 });
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(f.w, 1, f.d), [sideMat, sideMat, topMat, sideMat, sideMat, sideMat]); // +x -x +y -y +z -z
+    floor.position.set(f.x, -0.5, f.z);
+    floor.receiveShadow = true;
+    group.add(floor);
+    // Visual-only underside so each piece looks like a floating island
+    const under = new THREE.Mesh(new THREE.BoxGeometry(Math.max(1, f.w - 2), 5, Math.max(1, f.d - 2)), underMat);
+    under.position.set(f.x, -3.5, f.z);
+    group.add(under);
+    if (physics) {
+      staticBodies.push(physics.createStaticBox({
+        position: { x: f.x, y: -0.5, z: f.z }, halfExtents: { x: f.w / 2, y: 0.5, z: f.d / 2 }, friction: 0.9,
+      }));
+    }
   }
 
-  // Rails on the north and west edges only; the south and east edges are open drops.
-  addStatic('Rail North', { x: 0, y: 0.6, z: -half + 0.25 }, { x: half, y: 0.6, z: 0.25 }, railMat);
-  addStatic('Rail West', { x: -half + 0.25, y: 0.6, z: 0 }, { x: 0.25, y: 0.6, z: half }, railMat);
-  addStatic('Raised Block', { x: 9, y: 0.75, z: -9 }, { x: 3, y: 0.75, z: 3 }, blockMat);
-  const rampQ = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.3, 0, 0));
-  addStatic('Ramp', { x: -8, y: 1.2, z: 6 }, { x: 3, y: 0.2, z: 4 }, blockMat, rampQ);
+  // ---- Static props ----
+  const mats = {
+    rail: new THREE.MeshStandardMaterial({ color: theme.rail, roughness: 0.5 }),
+    block: new THREE.MeshStandardMaterial({ color: theme.block, roughness: 0.5 }),
+  };
+  for (const s of map.statics) {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(s.half.x * 2, s.half.y * 2, s.half.z * 2), mats[s.color] || mats.block);
+    mesh.name = s.name;
+    mesh.position.set(s.pos.x, s.pos.y, s.pos.z);
+    let rotation = null;
+    if (s.rotX) {
+      rotation = new THREE.Quaternion().setFromEuler(new THREE.Euler(s.rotX, 0, 0));
+      mesh.quaternion.set(rotation.x, rotation.y, rotation.z, rotation.w);
+    }
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    if (physics) staticBodies.push(physics.createStaticBox({ position: s.pos, halfExtents: s.half, rotation }));
+  }
 
   // ---- Crates ----
   const crateTextures = new Map();
@@ -102,47 +111,58 @@ export function createWorld({ THREE, scene, physics, arena, palette, maxExtraCra
     return crateTextures.get(color);
   }
 
-  const initialCrates = [];
-  const extraCrates = [];
-
-  function spawnCrate(position, size, color) {
-    const h = size / 2;
+  /** A crate mesh with no physics (guests build these from the host's snapshots). */
+  function createCrateMesh(size, color) {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), crateMaterial(color));
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    scene.add(mesh);
-    const body = physics.createDynamicBox({ position, halfExtents: { x: h, y: h, z: h } });
-    const entity = physics.register(body, mesh, { kind: 'crate' });
+    group.add(mesh);
+    return mesh;
+  }
+
+  function removeCrateMesh(mesh) {
+    group.remove(mesh);
+    mesh.geometry.dispose();
+  }
+
+  const initialCrates = [];
+  const extraCrates = [];
+  let nextNetId = 1;
+
+  function spawnCrate(position, size, color) {
+    const h = size / 2;
+    const mesh = createCrateMesh(size, color);
+    const body = physics.createDynamicBox({ position, halfExtents: { x: h, y: h, z: h }, groups: crateGroups });
+    const entity = physics.register(body, mesh, { kind: 'crate', half: h });
+    entity.netId = nextNetId++;   // lets online guests refer to this crate
+    entity.color = color;
     return entity;
   }
 
-  // A small pyramid, a tall stack, and a few loose crates
   const P = palette;
-  let c = 0;
-  const next = () => P[c++ % P.length];
-  const pyramid = [
-    [4, 0.5, 6], [5.05, 0.5, 6], [6.1, 0.5, 6], [4.5, 1.5, 6], [5.6, 1.5, 6], [5.05, 2.5, 6],
-  ];
-  for (const [x, y, z] of pyramid) initialCrates.push(spawnCrate({ x, y, z }, 1, next()));
-  for (let i = 0; i < 4; i++) initialCrates.push(spawnCrate({ x: -4, y: 0.5 + i * 1.02, z: -5 }, 1, next()));
-  initialCrates.push(spawnCrate({ x: 0, y: 0.7, z: -8 }, 1.4, next()));
-  initialCrates.push(spawnCrate({ x: 3, y: 0.4, z: -3 }, 0.8, next()));
-  initialCrates.push(spawnCrate({ x: -3, y: 0.5, z: 5 }, 1, next()));
+  if (physics) {
+    let c = 0;
+    for (const cr of map.crates) initialCrates.push(spawnCrate({ x: cr.x, y: cr.y, z: cr.z }, cr.size, P[c++ % P.length]));
+  }
 
   function removeCrate(entity) {
     physics.remove(entity);
-    scene.remove(entity.mesh);
+    group.remove(entity.mesh);
     entity.mesh.geometry.dispose(); // materials are shared, so only the geometry is freed
   }
 
   function dropCrate() {
+    if (!physics) return;
     const size = 0.8 + Math.random() * 0.6;
-    const pos = { x: (Math.random() - 0.5) * 24, y: 12, z: (Math.random() - 0.5) * 24 };
-    extraCrates.push(spawnCrate(pos, size, P[Math.floor(Math.random() * P.length)]));
+    let x; let z;
+    if (map.dropBox) { x = (Math.random() - 0.5) * 2 * map.dropBox.x; z = (Math.random() - 0.5) * 2 * map.dropBox.z; }
+    else { const p = arena.randomPoint(Math.random, 1.5); x = p.x; z = p.z; }
+    extraCrates.push(spawnCrate({ x, y: 12, z }, size, P[Math.floor(Math.random() * P.length)]));
     while (extraCrates.length > maxExtraCrates) removeCrate(extraCrates.shift());
   }
 
   function resetCrates() {
+    if (!physics) return;
     while (extraCrates.length) removeCrate(extraCrates.pop());
     for (const e of initialCrates) physics.respawnEntity(e);
   }
@@ -156,9 +176,9 @@ export function createWorld({ THREE, scene, physics, arena, palette, maxExtraCra
       i % 2 ? new THREE.SphereGeometry(2.2, 24, 16) : new THREE.TorusGeometry(2, 0.8, 16, 32),
       new THREE.MeshStandardMaterial({ color: decorColors[i], roughness: 0.5 })
     );
-    m.position.set(Math.cos(angle) * 40, 8 + (i % 3) * 5, Math.sin(angle) * 40);
+    m.position.set(Math.cos(angle) * map.decorRadius, 8 + (i % 3) * 5, Math.sin(angle) * map.decorRadius);
     m.castShadow = false;
-    scene.add(m);
+    group.add(m);
     decor.push({ mesh: m, baseY: m.position.y, phase: i });
   }
   let time = 0;
@@ -171,5 +191,16 @@ export function createWorld({ THREE, scene, physics, arena, palette, maxExtraCra
     }
   }
 
-  return { dropCrate, resetCrates, update, initialCrates, extraCrates };
+  /** Removes the whole map (meshes, crates and colliders). */
+  function dispose() {
+    if (physics) {
+      for (const e of [...initialCrates, ...extraCrates]) physics.remove(e);
+      for (const b of staticBodies) physics.removeStatic(b);
+    }
+    initialCrates.length = 0;
+    extraCrates.length = 0;
+    scene.remove(group);
+  }
+
+  return { map, arena, dropCrate, resetCrates, update, dispose, createCrateMesh, removeCrateMesh, initialCrates, extraCrates };
 }

@@ -13,6 +13,7 @@ export class ThirdPersonCamera {
     this.distance = config.distance;
     this.focus = new THREE.Vector3();
     this._dragging = false;
+    this.shakeAmount = 0;
 
     this._onPointerDown = this._onPointerDown.bind(this);
     this._onPointerMove = this._onPointerMove.bind(this);
@@ -33,7 +34,13 @@ export class ThirdPersonCamera {
     this._apply();
   }
 
+  /** Adds a short camera shake (decays on its own). */
+  shake(amount) {
+    this.shakeAmount = Math.max(this.shakeAmount, amount);
+  }
+
   update(dt, target) {
+    this.shakeAmount *= Math.exp(-9 * dt);
     const kh = 1 - Math.exp(-this.config.followSharpness * dt);
     const kv = 1 - Math.exp(-this.config.followSharpnessY * dt);
     // Do not follow the player down into the void; the camera just watches them fall.
@@ -54,6 +61,10 @@ export class ThirdPersonCamera {
       Math.max(this.focus.y + offsetY, 0.6), // never dip below the floor
       this.focus.z + offsetZ
     );
+    if (this.shakeAmount > 0.002) {
+      this.camera.position.x += (Math.random() - 0.5) * this.shakeAmount;
+      this.camera.position.y += (Math.random() - 0.5) * this.shakeAmount;
+    }
     this.camera.lookAt(this.focus.x, this.focus.y + this.config.lookHeight, this.focus.z);
   }
 

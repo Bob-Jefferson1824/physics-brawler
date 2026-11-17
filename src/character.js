@@ -6,7 +6,7 @@
 //                        stumbling when the body is hit by something sudden.
 //  CharacterPose       - turns the body's physical state into cartoon animation values
 //                        (lean, wobble, limb swing, squash and stretch).
-import { CHARACTER } from './config.js';
+import { CHARACTER } from './config.js?v=s4r1';
 
 const hypot = Math.hypot;
 
@@ -37,11 +37,13 @@ export class CharacterController {
     this.wasGrounded = false;
     this.peakFall = 0;
     this.grounded = false;
-    this.state = 'normal';        // 'normal' | 'stumble' | 'recover'
+    this.state = 'normal';        // 'normal' | 'stumble' | 'down' | 'recover'
+    this.grabbed = false;         // set by the combat system while someone is holding this character
+    this.speedMul = 1;            // set by the combat system while carrying something heavy
     this.stateTimer = 0;
     this.stumbleCooldown = 0;
     this.stumbleDir = { x: 0, z: 1 };
-    this.events = { jumped: false, landed: 0, stumbled: false };
+    this.events = { jumped: false, landed: 0, stumbled: false, knockedDown: false };
   }
 
   setMove(x, z) {
@@ -57,8 +59,23 @@ export class CharacterController {
   /** Returns and clears the one-shot events (jump, landing, stumble) for the animation system. */
   consumeEvents() {
     const e = this.events;
-    this.events = { jumped: false, landed: 0, stumbled: false };
+    this.events = { jumped: false, landed: 0, stumbled: false, knockedDown: false };
     return e;
+  }
+
+  /** Used by the combat system (for example when this character is thrown). */
+  forceStumble(dirX, dirZ, knockDown = false) {
+    const len = hypot(dirX, dirZ) || 1;
+    this.stumbleDir = { x: dirX / len, z: dirZ / len };
+    this.events.stumbled = true;
+    if (knockDown) {
+      this.state = 'down';
+      this.stateTimer = this.cfg.downTime;
+      this.events.knockedDown = true;
+    } else if (this.state === 'normal' || this.state === 'recover') {
+      this.state = 'stumble';
+      this.stateTimer = this.cfg.stumbleTime;
+    }
   }
 
   /**
@@ -91,14 +108,30 @@ export class CharacterController {
     const ex = vel.x - this.last.x;
     const ez = vel.z - this.last.z;
     const em = hypot(ex, ez);
-    if (em > cfg.stumbleThreshold && this.state === 'normal' && this.stumbleCooldown <= 0) {
+    if (em > cfg.knockdownThreshold && this.state !== 'down') {
+      this.state = 'down';
+      this.stateTimer = cfg.downTime;
+      this.stumbleDir = { x: ex / em, z: ez / em };
+      this.events.stumbled = true;
+      this.events.knockedDown = true;
+    } else if (em > cfg.stumbleThreshold && this.state === 'normal' && this.stumbleCooldown <= 0) {
       this.state = 'stumble';
       this.stateTimer = cfg.stumbleTime;
       this.stumbleDir = { x: ex / em, z: ez / em };
       this.events.stumbled = true;
     }
 
-    if (this.state === 'stumble') {
+    // Landing hard while already stumbling (for example after being thrown) knocks the character down
+    if (landSpeed > cfg.hardLandSpeed && this.state === 'stumble') {
+      this.state = 'down';
+      this.stateTimer = cfg.downTime;
+      this.events.knockedDown = true;
+    }
+
+    if (this.state === 'down') {
+      this.stateTimer -= dt;
+      if (this.stateTimer <= 0) { this.state = 'recover'; this.stateTimer = cfg.recoverTime; }
+    } else if (this.state === 'stumble') {
       this.stateTimer -= dt;
       if (this.stateTimer <= 0) { this.state = 'recover'; this.stateTimer = cfg.recoverTime; }
     } else if (this.state === 'recover') {
@@ -107,11 +140,14 @@ export class CharacterController {
     }
 
     // Horizontal: move current velocity toward the wanted velocity at a limited rate
-    const control = (grounded ? 1 : cfg.airControl) *
-      (this.state === 'stumble' ? 0.25 : this.state === 'recover' ? 0.7 : 1);
-    const hasInput = hypot(this.move.x, this.move.z) > 0.01;
-    const tx = this.move.x * cfg.maxSpeed;
-    const tz = this.move.z * cfg.maxSpeed;
+    const down = this.state === 'down';
+    let control = (grounded ? 1 : cfg.airControl) *
+      (this.state === 'stumble' ? 0.25 : this.state === 'recover' ? 0.7 : down ? 0.35 : 1);
+    if (this.grabbed) control *= 0.25; // held characters can barely steer, they can only struggle
+    const hasInput = !down && hypot(this.move.x, this.move.z) > 0.01;
+    const topSpeed = cfg.maxSpeed * this.speedMul;
+    const tx = down ? 0 : this.move.x * topSpeed;
+    const tz = down ? 0 : this.move.z * topSpeed;
     const dx = tx - vel.x;
     const dz = tz - vel.z;
     const dm = hypot(dx, dz);
@@ -124,7 +160,8 @@ export class CharacterController {
 
     // Vertical: only jumps (and a fall-speed cap) touch it; gravity stays with the physics engine
     let ny = vel.y;
-    if (this.jumpBuffer > 0 && this.coyote > 0 && this.jumpCooldown <= 0 && this.state !== 'stumble') {
+    if (this.jumpBuffer > 0 && this.coyote > 0 && this.jumpCooldown <= 0 &&
+        this.state !== 'stumble' && this.state !== 'down' && !this.grabbed) {
       ny = cfg.jumpSpeed;
       this.coyote = 0;
       this.jumpBuffer = 0;
@@ -167,6 +204,12 @@ export class CharacterPose {
     };
   }
 
+  /** A visual jolt (a hit that is too light to make the character stumble). */
+  kick(dx, dz, amount) {
+    this.lvx += dx * amount;
+    this.lvz += dz * amount;
+  }
+
   /** s = { vx, vy, vz, grounded, state, stumbleDir, move: {x,z}, events } */
   update(rawDt, s) {
     const dt = Math.min(rawDt, 1 / 30);
@@ -176,10 +219,13 @@ export class CharacterPose {
     const speed = hypot(s.vx, s.vz);
     const sf = Math.min(1, speed / cfg.maxSpeed);
 
-    // Turn toward where the player is steering (not while stumbling)
-    if (s.state !== 'stumble' && hypot(s.move.x, s.move.z) > 0.1) {
-      const target = Math.atan2(s.move.x, s.move.z);
-      this.yaw = wrapAngle(this.yaw + wrapAngle(target - this.yaw) * (1 - Math.exp(-cfg.turnSharpness * dt)));
+    // Turn toward the aim target if there is one, otherwise toward where the player is steering
+    const downOrStumble = s.state === 'stumble' || s.state === 'down';
+    const aiming = s.faceYaw !== undefined && s.faceYaw !== null;
+    if (!downOrStumble && (aiming || hypot(s.move.x, s.move.z) > 0.1)) {
+      const target = aiming ? s.faceYaw : Math.atan2(s.move.x, s.move.z);
+      const sharp = aiming ? cfg.turnSharpness * 1.4 : cfg.turnSharpness;
+      this.yaw = wrapAngle(this.yaw + wrapAngle(target - this.yaw) * (1 - Math.exp(-sharp * dt)));
     }
 
     // Smoothed acceleration, used for leaning into speed changes and turns
@@ -191,8 +237,9 @@ export class CharacterPose {
     // One-shot events
     const ev = s.events || {};
     if (ev.stumbled) {
-      this.lvx += s.stumbleDir.x * 6;
-      this.lvz += s.stumbleDir.z * 6;
+      const kick = ev.knockedDown ? 9 : 6;
+      this.lvx += s.stumbleDir.x * kick;
+      this.lvz += s.stumbleDir.z * kick;
     }
     if (ev.jumped) this.sv += 2.2;
     if (ev.landed) this.sv -= Math.min(ev.landed * 0.35, 4.5);
@@ -201,9 +248,11 @@ export class CharacterPose {
     // and wobbles back upright afterwards because the spring is under-damped.
     let tx = s.vx * 0.022 + this.ax * 0.010;
     let tz = s.vz * 0.022 + this.az * 0.010;
+    let leanCap = 0.9;
     if (s.state === 'stumble') { tx = s.stumbleDir.x * 0.8; tz = s.stumbleDir.z * 0.8; }
+    else if (s.state === 'down') { tx = s.stumbleDir.x * 1.4; tz = s.stumbleDir.z * 1.4; leanCap = 1.5; } // lies flat
     const tm = hypot(tx, tz);
-    if (tm > 0.9) { tx *= 0.9 / tm; tz *= 0.9 / tm; }
+    if (tm > leanCap) { tx *= leanCap / tm; tz *= leanCap / tm; }
     const k = 90;
     const c = 11;
     this.lvx += (k * (tx - this.lx) - c * this.lvx) * dt;
@@ -221,7 +270,7 @@ export class CharacterPose {
     if (s.grounded && speed > 0.3) this.phase += speed * dt * 1.7;
 
     this.aAir += ((s.grounded ? 0 : 1) - this.aAir) * (1 - Math.exp(-12 * dt));
-    const stTarget = s.state === 'stumble' ? 1 : s.state === 'recover' ? 0.35 : 0;
+    const stTarget = (s.state === 'stumble' || s.state === 'down') ? 1 : s.grabbed ? 0.8 : s.state === 'recover' ? 0.35 : 0;
     this.aStumble += (stTarget - this.aStumble) * (1 - Math.exp(-10 * dt));
 
     // Limb poses

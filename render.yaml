@@ -1,0 +1,9 @@
+# Render Blueprint: one web service that serves the game and the online server.
+services:
+  - type: web
+    name: physics-brawler
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz

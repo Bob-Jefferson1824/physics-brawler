@@ -1,0 +1,10 @@
+{
+  "name": "physics-brawler-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Online server for Physics Brawler (room relay + static files). The game itself runs in the browser.",
+  "main": "server/server.js",
+  "scripts": { "start": "node server/server.js" },
+  "engines": { "node": ">=18" },
+  "dependencies": { "ws": "^8.18.0" }
+}

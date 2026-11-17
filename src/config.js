@@ -67,5 +67,66 @@ export const CHARACTER = {
   stumbleTime: 0.7,
   recoverTime: 0.5,
   stumbleCooldown: 0.5,
+  knockdownThreshold: 13, // an outside speed change this big knocks the character flat
+  downTime: 1.4,          // time spent lying down before getting up
+  hardLandSpeed: 14,      // landing this fast while already stumbling = knocked down
   groundProbeLength: 0.28,
+};
+
+// ---------------------------------------------------------------------------------------------
+// Stage 3: collision groups (which bodies may touch which)
+//   bit 0 = arena, bit 1 = crates, bits 2-7 = characters 0-5, bits 8-13 = hands of characters 0-5
+// A fighter's hands never collide with that fighter's own body, and hands never collide with hands.
+// ---------------------------------------------------------------------------------------------
+export const MAX_FIGHTERS = 6;
+const CHAR_BITS = 0x00fc;
+export function crateGroups() { return ((0x0002 << 16) | 0xffff) >>> 0; }
+export function charGroups(index) {
+  const filter = 0xffff & ~(1 << (8 + index)); // everything except this character's own hands
+  return (((1 << (2 + index)) << 16) | filter) >>> 0;
+}
+export function handGroups(index, excludeMask = 0) {
+  // collides with the arena, crates and other characters (not its own owner, not other hands)
+  const filter = (0x0001 | 0x0002 | CHAR_BITS) & ~(1 << (2 + index)) & ~excludeMask;
+  return (((1 << (8 + index)) << 16) | filter) >>> 0;
+}
+
+export const COMBAT = {
+  handRadius: 0.17,
+  handMass: 0.6,
+  armRest: 0.62,            // resting arm length (hand hangs this far from the shoulder)
+  // punching
+  strikeTime: 0.12, strikeReach: 1.45, strikeSpeed: 16, strikeGain: 40,
+  retractTime: 0.22, retractSpeed: 12,
+  idleSpeed: 30, idleGain: 30,
+  punchCooldown: 0.34, pressBuffer: 0.12,
+  punchMass: 0.38,          // how hard a punch hits: impulse = punchMass x closing speed (weaker than Stage 3 v1)
+  punchMinSpeed: 5, punchUpward: 0.18, punchContactSlack: 0.08,
+  // reaching and grabbing
+  reachForward: 1.25, reachDrop: 0.35, reachSpeed: 12, reachGain: 30, seekRange: 2.5,
+  grabRange: 0.6,           // how close the hand must get to a crate/character to grab it
+  holdSpeed: 14, holdGain: 30,
+  // carrying (a spring pulls the held body toward a point in front of the holder)
+  carryRamp: 0.45, carryForward: 1.1, carryForwardChar: 1.2,
+  carryUp: 0.55, carryUpTwo: 0.95, carryUpChar: 0.35, carryUpCharTwo: 0.6, carryLateral: 0.22,
+  kp: 70, kd: 14,
+  strength: 34,             // maximum pulling force per hand (compare weight = mass x 22)
+  twoHandMult: 2.1, carrySlow: 0.45, maxLinkDistance: 2.6,
+  // throwing
+  throwOne: 8, throwTwo: 11, throwUp: 3.2, throwHandShare: 0.6, throwMinHold: 0.25, twoHandWindow: 0.25,
+  // breaking free
+  struggleMove: 0.55, struggleJump: 0.3, struggleDecay: 0.35, struggleThreshold: 1.0,
+  struggleTwoHand: 1.7, regrabCooldown: 0.8,
+  // loose arms: after a hit, while stumbling, knocked down or held, the arms swing freely
+  limpK: 55, limpC: 6, limpGravity: 9, limpBlend: 9, flinchMin: 3.5, flail: 0.55,
+  // aim assist for the human player
+  aimRange: 3.2, aimCone: 1.3,
+};
+
+export const BOTS = {
+  max: 5,
+  defaultCount: 3,
+  defaultDifficulty: 'normal',
+  colors: [0x4d96ff, 0x6bcb77, 0xffd93d, 0x9d4edd, 0xff9f45],
+  spawns: [{ x: -13, z: -12 }, { x: 13, z: 12 }, { x: -14, z: 14 }, { x: 14, z: -14 }, { x: 0, z: 16 }],
 };
